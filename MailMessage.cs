@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Mail;
 using System.Text;
+using AE.Net.Mail.Internal;
 
 namespace AE.Net.Mail {
 	public enum MailPriority {
@@ -83,15 +84,14 @@ namespace AE.Net.Mail {
 			}
 		}
 
-		public virtual void Load(Stream reader, bool headersOnly = false, int maxLength = 0, char? termChar = null) {
+		public virtual void Load(Stream reader, bool headersOnly = false, int maxLength = 0, char? termChar = null, int timeout = Network.DefaultTimeout) {
 			_HeadersOnly = headersOnly;
 			Headers = null;
 			Body = null;
 
-
 			var headers = new StringBuilder();
 			string line;
-			while ((line = reader.ReadLine(ref maxLength, _DefaultEncoding, termChar)) != null) {
+			while ((line = reader.ReadLine(ref maxLength, _DefaultEncoding, termChar, timeout)) != null) {
 				if (line.Trim().Length == 0)
 					if (headers.Length == 0)
 						continue;
@@ -107,7 +107,7 @@ namespace AE.Net.Mail {
 				if ( !string.IsNullOrEmpty( boundary ) )
 				{
 					var atts = new List<Attachment>();
-					var body = ParseMime( reader, boundary, ref maxLength, atts, Encoding, termChar );
+					var body = ParseMime( reader, boundary, ref maxLength, atts, Encoding, termChar, timeout );
 					if ( !string.IsNullOrEmpty( body ) )
 						SetBody( body );
 
@@ -115,14 +115,14 @@ namespace AE.Net.Mail {
 						( att.IsAttachment ? Attachments : AlternateViews ).Add( att );
 
 					if ( maxLength > 0 )
-						reader.ReadToEnd( maxLength, Encoding );
+						reader.ReadToEnd( maxLength, Encoding, timeout );
 				}
 				else
 				{
 					//	sometimes when email doesn't have a body, we get here with maxLength == 0 and we shouldn't read any further
 					string body = String.Empty;
 					if ( maxLength > 0 )
-						body = reader.ReadToEnd( maxLength, Encoding );
+						body = reader.ReadToEnd( maxLength, Encoding, timeout );
 
 					SetBody( body );
 				}
@@ -150,7 +150,7 @@ namespace AE.Net.Mail {
 			Subject = Headers["Subject"].RawValue;
 		}
 
-		private static string ParseMime(Stream reader, string boundary, ref int maxLength, ICollection<Attachment> attachments, Encoding encoding, char? termChar) {
+		private static string ParseMime(Stream reader, string boundary, ref int maxLength, ICollection<Attachment> attachments, Encoding encoding, char? termChar, int timeout) {
 			var maxLengthSpecified = maxLength > 0;
 			string data = null,
 				bounderInner = "--" + boundary,
@@ -163,12 +163,12 @@ namespace AE.Net.Mail {
 				if (data != null) {
 					body.Append(data);
 				}
-				data = reader.ReadLine(ref maxLength, encoding, termChar);
+				data = reader.ReadLine( ref maxLength, encoding, termChar, timeout );
 				n++;
 			} while (data != null && !data.StartsWith(bounderInner));
 
 			while (data != null && !data.StartsWith(bounderOuter) && !(maxLengthSpecified && maxLength == 0)) {
-				data = reader.ReadLine(ref maxLength, encoding, termChar);
+				data = reader.ReadLine( ref maxLength, encoding, termChar, timeout );
 				if (data == null) break;
 				var a = new Attachment { Encoding = encoding };
 
@@ -176,7 +176,7 @@ namespace AE.Net.Mail {
 				// read part header
 				while (!data.StartsWith(bounderInner) && data != string.Empty && !(maxLengthSpecified && maxLength == 0)) {
 					part.AppendLine(data);
-					data = reader.ReadLine(ref maxLength, encoding, termChar);
+					data = reader.ReadLine( ref maxLength, encoding, termChar, timeout );
 					if (data == null) break;
 				}
 				a.RawHeaders = part.ToString();
@@ -185,16 +185,16 @@ namespace AE.Net.Mail {
 				// check for nested part
 				var nestedboundary = a.Headers.GetBoundary();
 				if (!string.IsNullOrEmpty(nestedboundary)) {
-					ParseMime(reader, nestedboundary, ref maxLength, attachments, encoding, termChar);
+					ParseMime(reader, nestedboundary, ref maxLength, attachments, encoding, termChar, timeout);
 					while (!data.StartsWith(bounderInner))
-						data = reader.ReadLine(ref maxLength, encoding, termChar);
+						data = reader.ReadLine( ref maxLength, encoding, termChar, timeout );
 				} else {
-					data = reader.ReadLine(ref maxLength, a.Encoding, termChar);
+					data = reader.ReadLine( ref maxLength, a.Encoding, termChar, timeout );
 					if (data == null) break;
 					var nestedBody = new StringBuilder();
 					while (!data.StartsWith(bounderInner) && !(maxLengthSpecified && maxLength == 0)) {
 						nestedBody.AppendLine(data);
-						data = reader.ReadLine(ref maxLength, a.Encoding, termChar);
+						data = reader.ReadLine( ref maxLength, a.Encoding, termChar, timeout );
 					}
 					a.SetBody(nestedBody.ToString());
 					attachments.Add(a);

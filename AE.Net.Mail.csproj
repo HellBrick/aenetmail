@@ -62,6 +62,7 @@
     <Compile Include="HeaderCollection.cs" />
     <Compile Include="HeaderObject.cs" />
     <Compile Include="Imap\MessageEventArgs.cs" />
+    <Compile Include="Internal\Network.cs" />
     <Compile Include="Utilities.cs" />
     <Compile Include="IMailClient.cs" />
     <Compile Include="MailMessage.cs" />

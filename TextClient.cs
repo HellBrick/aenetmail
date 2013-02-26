@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net.Sockets;
+using AE.Net.Mail.Internal;
 
 namespace AE.Net.Mail {
 	public abstract class TextClient : IDisposable {
@@ -101,7 +102,7 @@ namespace AE.Net.Mail {
 
 		protected virtual string GetResponse() {
 			int max = 0;
-			return _Stream.ReadLine(ref max, Encoding, null);
+			return _Stream.ReadLine(ref max, Encoding, null, Network.DefaultTimeout);
 		}
 
 		protected virtual void SendCommandCheckOK(string command) {

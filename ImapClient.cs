@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using AE.Net.Mail.Internal;
 
 namespace AE.Net.Mail {
 
@@ -337,20 +338,20 @@ namespace AE.Net.Mail {
 			return GetMessage(index, headersonly, true);
 		}
 
-		public virtual MailMessage GetMessage(int index, bool headersonly, bool setseen) {
+		public virtual MailMessage GetMessage(int index, bool headersonly, bool setseen, int timeout = Network.DefaultTimeout) {
 			return GetMessages(index, index, headersonly, setseen).FirstOrDefault();
 		}
 
-		public virtual MailMessage GetMessage(string uid, bool headersonly, bool setseen) {
+		public virtual MailMessage GetMessage(string uid, bool headersonly, bool setseen, int timeout = Network.DefaultTimeout) {
 			return GetMessages(uid, uid, headersonly, setseen).FirstOrDefault();
 		}
 
-		public virtual MailMessage[] GetMessages(string startUID, string endUID, bool headersonly = true, bool setseen = false) {
-			return GetMessages(startUID, endUID, true, headersonly, setseen);
+		public virtual MailMessage[] GetMessages(string startUID, string endUID, bool headersonly = true, bool setseen = false, int timeout = Network.DefaultTimeout) {
+			return GetMessages(startUID, endUID, true, headersonly, setseen, timeout);
 		}
 
-		public virtual MailMessage[] GetMessages(int startIndex, int endIndex, bool headersonly = true, bool setseen = false) {
-			return GetMessages((startIndex + 1).ToString(), (endIndex + 1).ToString(), false, headersonly, setseen);
+		public virtual MailMessage[] GetMessages(int startIndex, int endIndex, bool headersonly = true, bool setseen = false, int timeout = Network.DefaultTimeout) {
+			return GetMessages((startIndex + 1).ToString(), (endIndex + 1).ToString(), false, headersonly, setseen, timeout);
 		}
 
 		public virtual void DownloadMessage(System.IO.Stream stream, int index, bool setseen) {
@@ -365,26 +366,33 @@ namespace AE.Net.Mail {
 			});
 		}
 
-		public virtual MailMessage[] GetMessages(string start, string end, bool uid, bool headersonly, bool setseen) {
+		public virtual MailMessage[] GetMessages( string start, string end, bool uid, bool headersonly, bool setseen )
+		{
+			return GetMessages( start, end, uid, headersonly, setseen, Network.DefaultTimeout );
+		}
+
+		public virtual MailMessage[] GetMessages( string start, string end, bool uid, bool headersonly, bool setseen, int timeout )
+		{
 			var x = new List<MailMessage>();
 
-			GetMessages(start, end, uid, headersonly, setseen, (stream, size, imapHeaders) => {
+			GetMessages( start, end, uid, headersonly, setseen, ( stream, size, imapHeaders ) =>
+			{
 				var mail = new MailMessage { Encoding = Encoding };
 				mail.Size = size;
 
-				if (imapHeaders["UID"] != null)
+				if ( imapHeaders["UID"] != null )
 					mail.Uid = imapHeaders["UID"];
 
-				if (imapHeaders["Flags"] != null)
-					mail.SetFlags(imapHeaders["Flags"]);
+				if ( imapHeaders["Flags"] != null )
+					mail.SetFlags( imapHeaders["Flags"] );
 
-				mail.Load(_Stream, headersonly, mail.Size);
+				mail.Load( _Stream, headersonly, mail.Size, null, timeout );
 
-				foreach (var key in imapHeaders.AllKeys.Except(new[] { "UID", "Flags", "BODY[]", "BODY[HEADER]" }, StringComparer.OrdinalIgnoreCase))
-					mail.Headers.Add(key, new HeaderValue(imapHeaders[key]));
+				foreach ( var key in imapHeaders.AllKeys.Except( new[] { "UID", "Flags", "BODY[]", "BODY[HEADER]" }, StringComparer.OrdinalIgnoreCase ) )
+					mail.Headers.Add( key, new HeaderValue( imapHeaders[key] ) );
 
-				x.Add(mail);
-			});
+				x.Add( mail );
+			} );
 
 			return x.ToArray();
 		}

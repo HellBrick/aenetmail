@@ -277,18 +277,7 @@ namespace AE.Net.Mail {
 			if (response.StartsWith("*")) {
 				x = new Mailbox(mailbox);
 				while (response.StartsWith("*")) {
-					Match m;
-					m = Regex.Match(response, @"(\d+) EXISTS");
-					if (m.Groups.Count > 1) { x.NumMsg = Convert.ToInt32(m.Groups[1].ToString()); }
-					m = Regex.Match(response, @"(\d+) RECENT");
-					if (m.Groups.Count > 1)
-						x.NumNewMsg = Convert.ToInt32(m.Groups[1].ToString());
-					m = Regex.Match(response, @"UNSEEN (\d+)");
-					if (m.Groups.Count > 1)
-						x.NumUnSeen = Convert.ToInt32(m.Groups[1].ToString());
-					m = Regex.Match(response, @" FLAGS \((.*?)\)");
-					if (m.Groups.Count > 1)
-						x.SetFlags(m.Groups[1].ToString());
+					ParseSelectResponseLine( x, response );
 					response = GetResponse();
 				}
 				_SelectedMailbox = mailbox;
@@ -656,40 +645,64 @@ namespace AE.Net.Mail {
 					.ToArray();
 		}
 
-		public virtual Mailbox SelectMailbox(string mailbox) {
+		public virtual Mailbox SelectMailbox( string mailbox )
+		{
 			IdlePause();
 
-			mailbox = ModifiedUtf7Encoding.Encode(mailbox);
+			mailbox = ModifiedUtf7Encoding.Encode( mailbox );
 			Mailbox x = null;
 			string tag = GetTag();
 			string command = tag + "SELECT " + mailbox.QuoteString();
-			string response = SendCommandGetResponse(command);
-			if (response.StartsWith("*")) {
-				x = new Mailbox(mailbox);
-				while (response.StartsWith("*")) {
-					Match m;
-					m = Regex.Match(response, @"(\d+) EXISTS");
-					if (m.Groups.Count > 1) { x.NumMsg = Convert.ToInt32(m.Groups[1].ToString()); }
-					m = Regex.Match(response, @"(\d+) RECENT");
-					if (m.Groups.Count > 1)
-						x.NumNewMsg = Convert.ToInt32(m.Groups[1].ToString());
-					m = Regex.Match(response, @"UNSEEN (\d+)");
-					if (m.Groups.Count > 1)
-						x.NumUnSeen = Convert.ToInt32(m.Groups[1].ToString());
-					m = Regex.Match(response, @" FLAGS \((.*?)\)");
-					if (m.Groups.Count > 1)
-						x.SetFlags(m.Groups[1].ToString());
+			string response = SendCommandGetResponse( command );
+			if ( response.StartsWith( "*" ) )
+			{
+				x = new Mailbox( mailbox );
+				while ( response.StartsWith( "*" ) )
+				{
+					ParseSelectResponseLine( x, response );
 					response = GetResponse();
 				}
-				if (IsResultOK(response)) {
-					x.IsWritable = Regex.IsMatch(response, "READ.WRITE", RegexOptions.IgnoreCase);
+				if ( IsResultOK( response ) )
+				{
+					x.IsWritable = Regex.IsMatch( response, "READ.WRITE", RegexOptions.IgnoreCase );
 				}
 				_SelectedMailbox = mailbox;
-			} else {
-				throw new Exception(response);
+			}
+			else
+			{
+				throw new Exception( response );
 			}
 			IdleResume();
 			return x;
+		}
+
+		private static void ParseSelectResponseLine( Mailbox mailbox, string response )
+		{
+			Match m;
+			m = Regex.Match( response, @"(\d+) EXISTS" );
+			if ( m.Groups.Count > 1 )
+				mailbox.NumMsg = Convert.ToInt32( m.Groups[1].ToString() );
+
+			m = Regex.Match( response, @"(\d+) RECENT" );
+			if ( m.Groups.Count > 1 )
+				mailbox.NumNewMsg = Convert.ToInt32( m.Groups[1].ToString() );
+
+			m = Regex.Match( response, @"UNSEEN (\d+)" );
+			if ( m.Groups.Count > 1 )
+			{
+				mailbox.FirstUnseenUid = Int32.Parse( m.Groups[1].Value );
+				mailbox.NumUnSeen = mailbox.FirstUnseenUid.Value;
+			}
+
+			m = Regex.Match( response, @"UIDNEXT (\d+)" );
+			if ( m.Groups.Count > 1 )
+			{
+				mailbox.NextUid = Int32.Parse( m.Groups[1].Value );
+			}
+
+			m = Regex.Match( response, @" FLAGS \((.*?)\)" );
+			if ( m.Groups.Count > 1 )
+				mailbox.SetFlags( m.Groups[1].ToString() );
 		}
 
 		public virtual void SetFlags(Flags flags, params MailMessage[] msgs) {
